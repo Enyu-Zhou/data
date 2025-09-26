@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="320" height="100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .table-text { font-family: "SimSun", "Times New Roman", serif; font-size: 12px; text-anchor: middle; }
+      .header-text { font-family: "SimSun", "Times New Roman", serif; font-size: 12px; text-anchor: middle; }
+    </style>
+  </defs>
+  
+  <!-- 表格外框 -->
+  <rect x="10" y="10" width="300" height="80" fill="none" stroke="black" stroke-width="1"/>
+  
+  <!-- 水平分割线 - 行高40px -->
+  <line x1="10" y1="50" x2="310" y2="50" stroke="black" stroke-width="1"/>
+  
+  <!-- 垂直分割线 -->
+  <line x1="85" y1="10" x2="85" y2="90" stroke="black" stroke-width="1"/>
+  <line x1="160" y1="10" x2="160" y2="90" stroke="black" stroke-width="1"/>
+  <line x1="235" y1="10" x2="235" y2="90" stroke="black" stroke-width="1"/>
+  
+  <!-- 表头 - 居中于第一行（y=30） -->
+  <text x="47" y="32" class="header-text">P(χ²≥k)</text>
+  <text x="122" y="32" class="header-text">0.050</text>
+  <text x="197" y="32" class="header-text">0.010</text>
+  <text x="272" y="32" class="header-text">0.001</text>
+  
+  <!-- 数据行 - 居中于第二行（y=70） -->
+  <text x="47" y="72" class="header-text">k</text>
+  <text x="122" y="72" class="table-text">3.841</text>
+  <text x="197" y="72" class="table-text">6.635</text>
+  <text x="272" y="72" class="table-text">10.828</text>
+</svg>

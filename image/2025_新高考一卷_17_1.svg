@@ -1,0 +1,41 @@
+<svg width="240" height="240" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+            <style>
+                  text {
+                        font-family: 'Times New Roman', serif;
+                        font-size: 14px;
+                        fill: black;
+                  }
+            </style>
+      </defs>
+
+      <!-- Base quadrilateral ABCD (solid lines BC, CD) -->
+      <line x1="20" y1="200" x2="160" y2="200" stroke="black" stroke-width="1" />
+      <line x1="160" y1="200" x2="220" y2="150" stroke="black" stroke-width="1" />
+
+      <!-- Dashed lines AB, AD -->
+      <line x1="100" y1="150" x2="20" y2="200" stroke="black" stroke-width="1" stroke-dasharray="4,4" />
+      <line x1="100" y1="150" x2="220" y2="150" stroke="black" stroke-width="1" stroke-dasharray="4,4" />
+
+      <!-- Solid lines from P -->
+      <line x1="100" y1="40" x2="20" y2="200" stroke="black" stroke-width="1" />
+      <line x1="100" y1="40" x2="160" y2="200" stroke="black" stroke-width="1" />
+      <line x1="100" y1="40" x2="220" y2="150" stroke="black" stroke-width="1" />
+
+      <!-- Dashed line AP -->
+      <line x1="100" y1="40" x2="100" y2="150" stroke="black" stroke-width="1" stroke-dasharray="4,4" />
+
+      <!-- Points -->
+      <circle cx="100" cy="150" r="2" fill="black" />
+      <circle cx="20" cy="200" r="2" fill="black" />
+      <circle cx="160" cy="200" r="2" fill="black" />
+      <circle cx="220" cy="150" r="2" fill="black" />
+      <circle cx="100" cy="40" r="2" fill="black" />
+
+      <!-- Labels -->
+      <text x="90" y="145" text-anchor="middle">A</text>
+      <text x="10" y="215">B</text>
+      <text x="170" y="215">C</text>
+      <text x="230" y="145">D</text>
+      <text x="95" y="35" text-anchor="middle">P</text>
+</svg>

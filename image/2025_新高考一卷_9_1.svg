@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="320" height="320" viewBox="0 0 320 320" xmlns="http://www.w3.org/2000/svg">
+  <desc>正三棱柱ABC-A1B1C1，D为BC中点，D1为B1C1中点</desc>
+
+  <!-- 整体上移50像素后的关键点位置：
+       上层 A: (50, 20), B: (150, 120), C: (280, 50)
+       下层 A1: (50, 190), B1: (150, 290), C1: (280, 220)
+       
+       D: BC中点 = (215, 85)
+       D1: B1C1中点 = (215, 255)
+  -->
+
+  <!-- 隐藏的线段（虚线） - 后面被遮挡的线 -->
+  <line x1="50" y1="190" x2="150" y2="290" style="stroke:black; stroke-width:1; stroke-dasharray:4,3;" /> <!-- A1B1 平行AB -->
+  <line x1="50" y1="190" x2="215" y2="255" style="stroke:black; stroke-width:1; stroke-dasharray:4,3;" /> <!-- A1D1 -->
+
+  <!-- 上底面三角形 ABC -->
+  <line x1="50" y1="20" x2="150" y2="120" style="stroke:black; stroke-width:1;" /> <!-- AB -->
+  <line x1="50" y1="20" x2="280" y2="50" style="stroke:black; stroke-width:1;" /> <!-- AC -->
+  <line x1="150" y1="120" x2="280" y2="50" style="stroke:black; stroke-width:1;" /> <!-- BC -->
+
+  <!-- 侧棱（垂直连接对应顶点） -->
+  <line x1="50" y1="20" x2="50" y2="190" style="stroke:black; stroke-width:1;" /> <!-- AA1 -->
+  <line x1="150" y1="120" x2="150" y2="290" style="stroke:black; stroke-width:1;" /> <!-- BB1 -->
+  <line x1="280" y1="50" x2="280" y2="220" style="stroke:black; stroke-width:1;" /> <!-- CC1 -->
+
+  <!-- 下底面可见边（平行于上底面对应边） -->
+  <line x1="150" y1="290" x2="280" y2="220" style="stroke:black; stroke-width:1;" /> <!-- B1C1 平行BC -->
+  <line x1="50" y1="190" x2="280" y2="220" style="stroke:black; stroke-width:1;" /> <!-- A1C1 平行AC -->
+
+  <!-- 内部连线 AD -->
+  <line x1="50" y1="20" x2="215" y2="85" style="stroke:black; stroke-width:1;" /> <!-- AD -->
+
+  <!-- D点和D1点（BC和B1C1的中点） -->
+  <circle cx="215" cy="85" r="2" fill="red"/>
+  <circle cx="215" cy="255" r="2" fill="red"/>
+
+  <!-- 红色DD1连线（垂直） -->
+  <line x1="215" y1="85" x2="215" y2="255" style="stroke:red; stroke-width:1;" /> <!-- DD1 -->
+
+  <!-- 标签 -->
+  <text x="35" y="15" style="font-family: Times New Roman, serif; font-size: 14px;">A</text>
+  <text x="135" y="135" style="font-family: Times New Roman, serif; font-size: 14px;">B</text>
+  <text x="285" y="45" style="font-family: Times New Roman, serif; font-size: 14px;">C</text>
+  <text x="220" y="80" style="font-family: Times New Roman, serif; font-size: 14px; fill: red;">D</text>
+  <text x="30" y="205" style="font-family: Times New Roman, serif; font-size: 14px;">A₁</text>
+  <text x="135" y="305" style="font-family: Times New Roman, serif; font-size: 14px;">B₁</text>
+  <text x="285" y="235" style="font-family: Times New Roman, serif; font-size: 14px;">C₁</text>
+  <text x="220" y="270" style="font-family: Times New Roman, serif; font-size: 14px; fill: red;">D₁</text>
+</svg>

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="320" height="240" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .solid-line {
+        stroke: black;
+        stroke-width: 1;
+        fill: none;
+      }
+
+      .dashed-line {
+        stroke: black;
+        stroke-width: 1;
+        fill: none;
+        stroke-dasharray: 4, 4;
+      }
+
+      .point-label {
+        font-family: "Times New Roman", serif;
+        font-size: 14px;
+        fill: black;
+      }
+    </style>
+  </defs>
+
+  <!-- 底面四边形ABCD -->
+  <line x1="30" y1="160" x2="290" y2="160" class="dashed-line" /> <!-- AB -->
+  <line x1="30" y1="160" x2="60" y2="120" class="dashed-line" /> <!-- AD -->
+  <line x1="60" y1="120" x2="230" y2="120" class="dashed-line" /> <!-- DC -->
+  <line x1="230" y1="120" x2="290" y2="160" class="dashed-line" /> <!-- CB -->
+
+  <!-- 点E和F -->
+  <line x1="130" y1="160" x2="150" y2="120" class="dashed-line" /> <!-- EF -->
+
+  <!-- 翻折后的A'D' -->
+  <line x1="150" y1="120" x2="175" y2="65" class="dashed-line" /> <!-- FD' -->
+  <line x1="130" y1="160" x2="140" y2="100" class="solid-line" /> <!-- EA' -->
+  <line x1="140" y1="100" x2="175" y2="65" class="solid-line" /> <!-- A'D' -->
+
+  <!-- 连接线 -->
+  <line x1="140" y1="100" x2="290" y2="160" class="solid-line" /> <!-- A'B -->
+  <line x1="175" y1="65" x2="290" y2="160" class="solid-line" /> <!-- D'B -->
+  <line x1="175" y1="65" x2="230" y2="120" class="dashed-line" /> <!-- D'C -->
+
+  <!-- 原来的位置（虚线表示） -->
+  <line x1="60" y1="120" x2="30" y2="160" class="dashed-line" /> <!-- DA -->
+  <line x1="145" y1="120" x2="60" y2="120" class="dashed-line" /> <!-- FD -->
+
+  <!-- 点标签 -->
+  <text x="25" y="175" class="point-label">A</text>
+  <text x="295" y="175" class="point-label">B</text>
+  <text x="210" y="120" class="point-label">C</text>
+  <text x="50" y="120" class="point-label">D</text>
+  <text x="125" y="175" class="point-label">E</text>
+  <text x="150" y="135" class="point-label">F</text>
+  <text x="135" y="95" class="point-label">A'</text>
+  <text x="180" y="60" class="point-label">D'</text>
+</svg>

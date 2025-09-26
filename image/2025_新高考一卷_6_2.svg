@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="210" height="210" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 210">
+  <defs>
+    <style>
+      .text-base {
+        font-size: 13px;
+      }
+
+      .axis-text {
+        font-family: "Times New Roman", serif;
+        text-anchor: middle;
+      }
+
+      .label-text {
+        font-family: "Times New Roman", serif;
+        font-style: italic;
+      }
+
+      .vector-text {
+        font-family: "SimSun", serif;
+      }
+
+      .line-thick {
+        stroke: black;
+        stroke-width: 1;
+      }
+
+      .line-thin {
+        stroke: black;
+        stroke-width: 0.5;
+      }
+
+      .grid-line {
+        stroke-dasharray: 2, 2;
+      }
+
+      .fill-black {
+        fill: black;
+      }
+    </style>
+
+    <!-- 箭头定义 -->
+    <marker id="arrowhead" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+      <polygon points="0 0, 6 2, 0 4" class="fill-black" />
+    </marker>
+    <marker id="vectorhead" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+      <polygon points="0 0, 6 2, 0 4" class="fill-black" />
+    </marker>
+  </defs>
+
+  <!-- 坐标轴 -->
+  <!-- X轴 -->
+  <line x1="25" y1="185" x2="195" y2="185" class="line-thick" marker-end="url(#arrowhead)" />
+  <!-- Y轴 -->
+  <line x1="25" y1="185" x2="25" y2="15" class="line-thick" marker-end="url(#arrowhead)" />
+
+  <!-- 刻度线和标签 -->
+  <!-- X轴刻度 -->
+  <line x1="78" y1="182" x2="78" y2="188" class="line-thin" />
+  <text x="78" y="198" class="text-base axis-text">1</text>
+  <line x1="131" y1="182" x2="131" y2="188" class="line-thin" />
+  <text x="131" y="198" class="text-base axis-text">2</text>
+  <line x1="184" y1="182" x2="184" y2="188" class="line-thin" />
+  <text x="184" y="198" class="text-base axis-text">3</text>
+
+  <!-- Y轴刻度 -->
+  <line x1="22" y1="132" x2="28" y2="132" class="line-thin" />
+  <text x="17" y="136" class="text-base axis-text">1</text>
+  <line x1="22" y1="79" x2="28" y2="79" class="line-thin" />
+  <text x="17" y="83" class="text-base axis-text">2</text>
+  <line x1="22" y1="26" x2="28" y2="26" class="line-thin" />
+  <text x="17" y="30" class="text-base axis-text">3</text>
+
+  <!-- 原点标记 -->
+  <text x="17" y="190" class="text-base axis-text">0</text>
+
+  <!-- 坐标轴标签 -->
+  <text x="195" y="195" class="text-base label-text">x</text>
+  <text x="15" y="15" class="text-base label-text">y</text>
+
+  <!-- 网格虚线 -->
+  <line x1="78" y1="26" x2="78" y2="185" class="line-thin grid-line" />
+  <line x1="131" y1="26" x2="131" y2="185" class="line-thin grid-line" />
+  <line x1="184" y1="26" x2="184" y2="185" class="line-thin grid-line" />
+  <line x1="25" y1="132" x2="184" y2="132" class="line-thin grid-line" />
+  <line x1="25" y1="79" x2="184" y2="79" class="line-thin grid-line" />
+  <line x1="25" y1="26" x2="184" y2="26" class="line-thin grid-line" />
+
+  <!-- 视风风速向量从(3,3)到(0,2) -->
+  <line x1="184" y1="26" x2="25" y2="79" class="line-thick" marker-end="url(#vectorhead)" />
+  <text x="65" y="45" class="text-base vector-text">视风风速</text>
+
+  <!-- 船速向量从(2,0)到(3,3) -->
+  <line x1="131" y1="185" x2="184" y2="26" class="line-thick" marker-end="url(#vectorhead)" />
+  <text x="150" y="145" class="text-base vector-text">船速</text>
+
+</svg>
