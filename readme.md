@@ -90,13 +90,14 @@
 
 ### 初始化数据库
 
-1. 云端数据库地址 `101.126.70.212`，用户名 `zhouenyu`，数据库名 `group`，端口 `5432`，密码保存在 `~/.pgpass`。首次部署或需重建结构时执行：
+1. 本地数据库地址 `101.126.70.212`，用户名 `zhouenyu`，数据库名 `data`，端口 `5432`，密码保存在 `~/.pgpass`。首次部署或需重建结构时执行：
 
    ```bash
-   psql -h 101.126.70.212 -U zhouenyu -d group -f sql/001_init_create.sql
+   psql -h 101.126.70.212 -U zhouenyu -d data -f sql/001_create_question_exam.sql
    ```
 
    `.pgpass` 会自动提供密码。如表结构已存在且无需调整，可跳过此步骤。
+   远程环境已创建 `content` schema，本脚本会在本地确保同名 schema 存在并将所有对象写入其中。
 
 2. 确保安装 `psycopg`，建议命令：
 
@@ -109,98 +110,35 @@
 使用脚本 `scripts/ingest_exams.py` 将 Markdown 写入数据库：
 
 ```bash
-python scripts/ingest_exams.py exam/2025-新高考一卷.md --dsn "postgresql://zhouenyu@101.126.70.212:5432/group"
+python scripts/ingest_exams.py exam/2025-新高考一卷.md --dsn "postgresql://zhouenyu@127.0.0.1:5432/data"
 ```
 
-- 多个文件可一次传入：`python scripts/ingest_exams.py exam/*.md --dsn "postgresql://zhouenyu@101.126.70.212:5432/group"`
+- 多个文件可一次传入：`python scripts/ingest_exams.py exam/*.md --dsn "postgresql://zhouenyu@127.0.0.1:5432/data"`
 - 使用 `--dry-run` 仅校验解析并输出计划操作，不写数据库。
 - 日志中若出现 `Parsed exam ...` 表示解析成功；`Ingested exam ...` 表示完成写入。脚本会按照题号自动 upsert 题目、试卷与映射关系。
+- 导入脚本会在连接建立后执行 `SET search_path TO content, public`，无需额外指定 schema。
 
 ### 导入后校验
 
-- 使用预置视图快速抽查写入结果（视图定义已在 `sql/001_init_create.sql` 中创建）：
-
-  ```bash
-  for f in sql/check_question_*_view.sql; do
-    psql -h 101.126.70.212 -U zhouenyu -d group -f "$f"
-  done
-  ```
-
-- 可再执行 `SELECT COUNT(*) FROM exam_question;`、`SELECT COUNT(*) FROM exam;` 等基础查询确认写入数量。
+- 可执行 `SELECT COUNT(*) FROM exam_question;`、`SELECT COUNT(*) FROM exam;` 等基础查询确认写入数量。
+- 依题型抽查详情时直接查询各题型子表（例如 `question_single_choice`、`question_multiple_choice` 等），也可以编写临时查询脚本放在 `sql/` 目录并通过 `psql -f` 执行。
 - 若仓库提供额外 `test/show_*.sql` 校验脚本，可继续使用 `psql -f` 方式运行。
 
 ---
 
-## 第 3 步：通过视图查询 PostgreSQL 数据
+## 第 3 步：查询 PostgreSQL 数据
 
 进入云端数据库：
 
 ```bash
-psql -h 101.126.70.212 -U zhouenyu -d group
+psql -h 101.126.70.212 -U zhouenyu -d data
 ```
 
-四个视图已在 `sql/001_init_create.sql` 中定义，应用层只需访问视图即可拿到题目详情：
+表结构由一张总表与四张题型子表组成，直接按需查询：
 
-`question_single_choice_view`
-
-| 字段 | 含义 | 类型 | 示例 |
-| --- | --- | --- | --- |
-| question_id | 题目主键 ID | `integer` | `6` |
-| question_type | 题型枚举 | `question_type_enum` | `single_choice` |
-| difficulty | 难度系数 | `integer` | `2` |
-| created_at | 创建时间 | `timestamptz` | `2025-01-05 08:00:00+08` |
-| updated_at | 最近更新 | `timestamptz` | `2025-01-05 08:10:00+08` |
-| question_text | 题干（Markdown） | `text` | `$(1+5i)i$的虚部为$(\quad)$` |
-| option_a | 选项 A | `text` | `$-1$` |
-| option_b | 选项 B | `text` | `$0$` |
-| option_c | 选项 C | `text` | `$1$` |
-| option_d | 选项 D | `text` | `$6$` |
-| image_filename | 图片文件名数组 | `varchar(100)[]` | `{"2025_一卷_6_1.svg"}` |
-| correct_answer | 正确选项 | `char(1)` | `C` |
-| explanation | 解析文本 | `text` | `虚部为实部...` |
-
-`question_multiple_choice_view`
-
-| 字段 | 含义 | 类型 | 示例 |
-| --- | --- | --- | --- |
-| question_id | 题目主键 ID | `integer` | `10` |
-| question_type | 题型枚举 | `question_type_enum` | `multiple_choice` |
-| difficulty | 难度系数 | `integer` | `2` |
-| created_at | 创建时间 | `timestamptz` | `2025-01-05 08:00:00+08` |
-| updated_at | 最近更新 | `timestamptz` | `2025-01-05 08:12:00+08` |
-| question_text | 题干（Markdown） | `text` | `设抛物线$C:y^2=6x$...` |
-| option_a | 选项 A | `text` | `结论 A` |
-| option_b | 选项 B | `text` | `结论 B` |
-| option_c | 选项 C | `text` | `结论 C` |
-| option_d | 选项 D | `text` | `结论 D` |
-| image_filename | 图片文件名数组 | `varchar(100)[]` | `NULL` |
-| correct_answer | 正确选项数组 | `char(1)[]` | `{"B","D"}` |
-| explanation | 解析文本 | `text` | `由焦点性质可得...` |
-
-`question_fill_blank_view`
-
-| 字段 | 含义 | 类型 | 示例 |
-| --- | --- | --- | --- |
-| question_id | 题目主键 ID | `integer` | `15` |
-| question_type | 题型枚举 | `question_type_enum` | `fill_blank` |
-| difficulty | 难度系数 | `integer` | `3` |
-| created_at | 创建时间 | `timestamptz` | `2025-01-05 08:00:00+08` |
-| updated_at | 最近更新 | `timestamptz` | `2025-01-05 08:14:00+08` |
-| question_text | 题干（Markdown） | `text` | `函数$f(x)$的零点为$\underline{\qquad\qquad}$` |
-| image_filename | 图片文件名数组 | `varchar(100)[]` | `NULL` |
-| correct_answer | 填空答案 | `text` | `$x=2$` |
-| explanation | 解析文本 | `text` | `代入方程求根...` |
-
-`question_problem_solving_view`
-
-| 字段 | 含义 | 类型 | 示例 |
-| --- | --- | --- | --- |
-| question_id | 题目主键 ID | `integer` | `18` |
-| question_type | 题型枚举 | `question_type_enum` | `problem_solving` |
-| difficulty | 难度系数 | `integer` | `4` |
-| created_at | 创建时间 | `timestamptz` | `2025-01-05 08:00:00+08` |
-| updated_at | 最近更新 | `timestamptz` | `2025-01-05 08:16:00+08` |
-| parts | 主干及小问集合（顺序与 Markdown 保持一致） | `jsonb` | `[{"part_id":120,"part_number":null,"question_text":"主干","image_filename":null},{"part_id":121,"part_number":"1","question_text":"小问","image_filename":null}]` |
+- `question`：保存题目公共字段（`question_type`、`difficulty`、创建/更新时间等）。
+- `question_single_choice`、`question_multiple_choice`、`question_fill_blank`、`question_problem_solving_parts`：按题型存放细节。
+- `exam`、`exam_question`：试卷与题目映射关系。
 
 常用查询示例：
 
@@ -208,11 +146,12 @@ psql -h 101.126.70.212 -U zhouenyu -d group
 
   ```sql
   SELECT eq.question_num,
-         scv.question_text,
-         ARRAY[scv.option_a, scv.option_b, scv.option_c, scv.option_d] AS options,
-         scv.correct_answer
+         sc.question_text,
+         ARRAY[sc.option_a, sc.option_b, sc.option_c, sc.option_d] AS options,
+         sc.correct_answer
   FROM exam_question AS eq
-  JOIN question_single_choice_view AS scv ON scv.question_id = eq.question_id
+  JOIN question AS q ON q.question_id = eq.question_id AND q.question_type = 'single_choice'
+  JOIN question_single_choice AS sc ON sc.question_id = eq.question_id
   WHERE eq.exam_id = 123
   ORDER BY eq.question_num;
   ```
@@ -220,25 +159,30 @@ psql -h 101.126.70.212 -U zhouenyu -d group
 - 查询多选题答案数组：
 
   ```sql
-  SELECT question_id,
-         question_text,
-         correct_answer -- char(1)[]
-  FROM question_multiple_choice_view
-  WHERE question_id = 789;
+  SELECT q.question_id,
+         mc.question_text,
+         mc.correct_answer -- char(1)[]
+  FROM question AS q
+  JOIN question_multiple_choice AS mc ON mc.question_id = q.question_id
+  WHERE q.question_id = 789;
   ```
 
 - 展开解答题各小问：
 
   ```sql
-  SELECT question_id,
-         jsonb_array_elements(parts) ->> 'part_number' AS part_number,
-         jsonb_array_elements(parts) ->> 'question_text' AS sub_question,
-         jsonb_array_elements(parts) -> 'image_filename' AS images
-  FROM question_problem_solving_view
-  WHERE question_id = 321;
+  SELECT q.question_id,
+         p.part_number,
+         p.question_text,
+         p.image_filename,
+         p.correct_answer
+  FROM question AS q
+  JOIN question_problem_solving_parts AS p ON p.question_id = q.question_id
+  WHERE q.question_id = 321
+  ORDER BY CASE WHEN p.part_number IS NULL THEN 0 ELSE 1 END,
+           string_to_array(p.part_number, '-')::int[];
   ```
 
-字段均保持 Markdown 文本，应用层可直接渲染；`image_filename` 保留与 Markdown 一致的文件名数组，前端可拼接 URL；`correct_answer` 字段类型由视图保证（单选为 `char(1)`、多选为 `char(1)[]`、填空为 `text`、解答题包含在 `parts jsonb` 中）。如需统计或检索，可在视图基础上再创建应用层查询或物化视图。
+所有题干、选项、解析等字段均保存 Markdown 文本，`image_filename` 保持 Markdown 同步的文件名数组；
 
 ---
 

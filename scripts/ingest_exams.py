@@ -588,6 +588,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     try:
         with psycopg.connect(dsn) as conn:
+            conn.execute("SET search_path TO content, ext")
             for path in files:
                 process_exam_file(conn, path, dry_run=args.dry_run)
     except (LookupError, ParseError, ValueError, KeyError, psycopg.Error) as exc:
