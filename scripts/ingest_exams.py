@@ -6,10 +6,11 @@ import argparse
 import os
 import re
 import sys
+from collections import defaultdict
 from dataclasses import dataclass, field
 from glob import glob
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import psycopg
 from psycopg.rows import dict_row
@@ -42,6 +43,7 @@ class ProblemPart:
     part_number: str
     text: str
     images: List[str] = field(default_factory=list)
+    part_id: Optional[int] = None
 
 
 @dataclass
@@ -51,6 +53,84 @@ class Exam:
     provinces: List[str]
     questions: List[Question]
     description: Optional[str] = None
+
+
+@dataclass
+class StoredQuestion:
+    """Representation of an existing question fetched from PostgreSQL."""
+
+    question: Question
+    part_ids: Dict[Optional[str], int] = field(default_factory=dict)
+
+
+def normalize_images(value: Optional[Sequence[str]]) -> Tuple[str, ...]:
+    return tuple(value or ())
+
+
+def normalize_options(options: Dict[str, str]) -> Tuple[Tuple[str, Optional[str]], ...]:
+    return tuple((label, options.get(label)) for label in ("A", "B", "C", "D"))
+
+
+def normalize_multiple_choice_answer(answer: str) -> Tuple[str, ...]:
+    if not answer:
+        return ()
+    return tuple(part.strip().upper() for part in answer.split(",") if part.strip())
+
+
+def normalize_question_for_compare(question: Question) -> Dict[str, Any]:
+    base: Dict[str, Any] = {
+        "question_type": question.question_type,
+        "difficulty": question.difficulty,
+    }
+    if question.question_type == "single_choice":
+        base.update(
+            {
+                "question_text": question.question_text,
+                "options": normalize_options(question.options),
+                "images": normalize_images(question.images),
+                "correct_answer": question.correct_answer.upper(),
+                "explanation": question.explanation or "",
+            }
+        )
+    elif question.question_type == "multiple_choice":
+        base.update(
+            {
+                "question_text": question.question_text,
+                "options": normalize_options(question.options),
+                "images": normalize_images(question.images),
+                "correct_answer": normalize_multiple_choice_answer(question.correct_answer),
+                "explanation": question.explanation or "",
+            }
+        )
+    elif question.question_type == "fill_blank":
+        base.update(
+            {
+                "question_text": question.question_text,
+                "images": normalize_images(question.images),
+                "correct_answer": question.correct_answer,
+                "explanation": question.explanation or "",
+            }
+        )
+    elif question.question_type == "problem_solving":
+        base.update(
+            {
+                "question_text": question.question_text,
+                "images": normalize_images(question.images),
+                "correct_answer": question.correct_answer or "",
+                "explanation": question.explanation or "",
+                "parts": tuple(
+                    (idx, part.part_number, part.text, normalize_images(part.images))
+                    for idx, part in enumerate(question.parts)
+                ),
+            }
+        )
+    else:
+        raise ValueError(f"Unsupported question_type '{question.question_type}'")
+    return base
+
+
+def questions_equal(existing: Question, incoming: Question) -> bool:
+    return normalize_question_for_compare(existing) == normalize_question_for_compare(incoming)
 
 
 class ParseError(RuntimeError):
@@ -246,6 +326,7 @@ class ExamParser:
             explanation = explanation.rstrip()
         for part in parts:
             part.text = part.text.rstrip()
+        options = {label: value.rstrip() for label, value in options.items()}
         normalized_answers = self._normalize_answer(correct_answer, question_type)
         question = Question(
             number=number,
@@ -333,6 +414,188 @@ def collect_files(inputs: Sequence[str]) -> List[Path]:
 # ---------------------------------------------------------------------------
 
 
+def fetch_existing_questions(conn: psycopg.Connection, question_ids: Sequence[int]) -> Dict[int, StoredQuestion]:
+    identifiers = list(dict.fromkeys(question_ids))
+    if not identifiers:
+        return {}
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT question_id, question_type, difficulty FROM question WHERE question_id = ANY(%s)",
+            (identifiers,),
+        )
+        base_rows = cur.fetchall()
+
+    meta = {row["question_id"]: row for row in base_rows}
+    stored: Dict[int, StoredQuestion] = {}
+
+    single_ids = [qid for qid, row in meta.items() if row["question_type"] == "single_choice"]
+    if single_ids:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT
+                    question_id,
+                    question_text,
+                    option_a,
+                    option_b,
+                    option_c,
+                    option_d,
+                    image_filename,
+                    correct_answer,
+                    explanation
+                FROM question_single_choice
+                WHERE question_id = ANY(%s)
+                """,
+                (single_ids,),
+            )
+            for row in cur.fetchall():
+                question_id = row["question_id"]
+                question = Question(
+                    number=0,
+                    question_type="single_choice",
+                    difficulty=meta[question_id]["difficulty"],
+                    question_text=row["question_text"],
+                    options={
+                        "A": row["option_a"],
+                        "B": row["option_b"],
+                        "C": row["option_c"],
+                        "D": row["option_d"],
+                    },
+                    correct_answer=(row["correct_answer"] or "").upper(),
+                    explanation=row["explanation"] or None,
+                    images=list(row["image_filename"] or []),
+                )
+                stored[question_id] = StoredQuestion(question=question)
+
+    multiple_ids = [qid for qid, row in meta.items() if row["question_type"] == "multiple_choice"]
+    if multiple_ids:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT
+                    question_id,
+                    question_text,
+                    option_a,
+                    option_b,
+                    option_c,
+                    option_d,
+                    image_filename,
+                    correct_answer,
+                    explanation
+                FROM question_multiple_choice
+                WHERE question_id = ANY(%s)
+                """,
+                (multiple_ids,),
+            )
+            for row in cur.fetchall():
+                answers = row["correct_answer"] or []
+                question_id = row["question_id"]
+                question = Question(
+                    number=0,
+                    question_type="multiple_choice",
+                    difficulty=meta[question_id]["difficulty"],
+                    question_text=row["question_text"],
+                    options={
+                        "A": row["option_a"],
+                        "B": row["option_b"],
+                        "C": row["option_c"],
+                        "D": row["option_d"],
+                    },
+                    correct_answer=",".join(part.upper() for part in answers),
+                    explanation=row["explanation"] or None,
+                    images=list(row["image_filename"] or []),
+                )
+                stored[question_id] = StoredQuestion(question=question)
+
+    fill_ids = [qid for qid, row in meta.items() if row["question_type"] == "fill_blank"]
+    if fill_ids:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT
+                    question_id,
+                    question_text,
+                    image_filename,
+                    correct_answer,
+                    explanation
+                FROM question_fill_blank
+                WHERE question_id = ANY(%s)
+                """,
+                (fill_ids,),
+            )
+            for row in cur.fetchall():
+                question_id = row["question_id"]
+                question = Question(
+                    number=0,
+                    question_type="fill_blank",
+                    difficulty=meta[question_id]["difficulty"],
+                    question_text=row["question_text"],
+                    options={},
+                    correct_answer=row["correct_answer"] or "",
+                    explanation=row["explanation"] or None,
+                    images=list(row["image_filename"] or []),
+                )
+                stored[question_id] = StoredQuestion(question=question)
+
+    problem_ids = [qid for qid, row in meta.items() if row["question_type"] == "problem_solving"]
+    if problem_ids:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT
+                    part_id,
+                    question_id,
+                    part_number,
+                    question_text,
+                    image_filename,
+                    correct_answer,
+                    explanation
+                FROM question_problem_solving_parts
+                WHERE question_id = ANY(%s)
+                ORDER BY question_id, part_number IS NULL DESC, part_number
+                """,
+                (problem_ids,),
+            )
+            rows_by_question: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+            for row in cur.fetchall():
+                rows_by_question[row["question_id"]].append(row)
+
+        for question_id in problem_ids:
+            row_group = rows_by_question.get(question_id, [])
+            if not row_group:
+                continue
+            main_row = next((row for row in row_group if row["part_number"] is None), None)
+            if main_row is None:
+                raise ValueError(f"problem_solving question {question_id} missing main part")
+            question = Question(
+                number=0,
+                question_type="problem_solving",
+                difficulty=meta[question_id]["difficulty"],
+                question_text=main_row["question_text"],
+                options={},
+                correct_answer=main_row["correct_answer"] or "",
+                explanation=main_row["explanation"] or None,
+                images=list(main_row["image_filename"] or []),
+            )
+            part_ids: Dict[Optional[str], int] = {None: main_row["part_id"]}
+            for row in row_group:
+                part_number = row["part_number"]
+                if part_number is None:
+                    continue
+                part = ProblemPart(
+                    part_number=part_number,
+                    text=row["question_text"],
+                    images=list(row["image_filename"] or []),
+                    part_id=row["part_id"],
+                )
+                question.parts.append(part)
+                part_ids[part_number] = row["part_id"]
+            stored[question_id] = StoredQuestion(question=question, part_ids=part_ids)
+
+    return stored
+
+
 def write_single_choice(cur: psycopg.Cursor, question_id: int, question: Question) -> None:
     cur.execute(
         """
@@ -347,6 +610,15 @@ def write_single_choice(cur: psycopg.Cursor, question_id: int, question: Questio
             correct_answer,
             explanation
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (question_id) DO UPDATE SET
+            question_text = EXCLUDED.question_text,
+            option_a = EXCLUDED.option_a,
+            option_b = EXCLUDED.option_b,
+            option_c = EXCLUDED.option_c,
+            option_d = EXCLUDED.option_d,
+            image_filename = EXCLUDED.image_filename,
+            correct_answer = EXCLUDED.correct_answer,
+            explanation = EXCLUDED.explanation
         """,
         (
             question_id,
@@ -377,6 +649,15 @@ def write_multiple_choice(cur: psycopg.Cursor, question_id: int, question: Quest
             correct_answer,
             explanation
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (question_id) DO UPDATE SET
+            question_text = EXCLUDED.question_text,
+            option_a = EXCLUDED.option_a,
+            option_b = EXCLUDED.option_b,
+            option_c = EXCLUDED.option_c,
+            option_d = EXCLUDED.option_d,
+            image_filename = EXCLUDED.image_filename,
+            correct_answer = EXCLUDED.correct_answer,
+            explanation = EXCLUDED.explanation
         """,
         (
             question_id,
@@ -402,6 +683,11 @@ def write_fill_blank(cur: psycopg.Cursor, question_id: int, question: Question) 
             correct_answer,
             explanation
         ) VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (question_id) DO UPDATE SET
+            question_text = EXCLUDED.question_text,
+            image_filename = EXCLUDED.image_filename,
+            correct_answer = EXCLUDED.correct_answer,
+            explanation = EXCLUDED.explanation
         """,
         (
             question_id,
@@ -413,25 +699,85 @@ def write_fill_blank(cur: psycopg.Cursor, question_id: int, question: Question) 
     )
 
 
-def write_problem_solving(cur: psycopg.Cursor, question_id: int, question: Question) -> None:
-    entries: List[Tuple[Optional[str], str, Optional[List[str]], Optional[str], Optional[str]]] = [
-        (None, question.question_text, question.images or None, question.correct_answer, question.explanation)
-    ]
-    for part in question.parts:
-        entries.append((part.part_number, part.text, part.images or None, None, None))
-    cur.executemany(
-        """
-        INSERT INTO question_problem_solving_parts (
-            question_id,
-            part_number,
-            question_text,
-            image_filename,
-            correct_answer,
-            explanation
-        ) VALUES (%s, %s, %s, %s, %s, %s)
-        """,
-        [(question_id, number, text, images, answer, explanation) for number, text, images, answer, explanation in entries],
+def write_problem_solving(
+    cur: psycopg.Cursor,
+    question_id: int,
+    question: Question,
+    existing_parts: Optional[Dict[Optional[str], int]] = None,
+) -> None:
+    parts_map: Dict[Optional[str], int] = dict(existing_parts or {})
+
+    main_part_id = parts_map.pop(None, None)
+    main_payload = (
+        question.question_text,
+        question.images or None,
+        question.correct_answer,
+        question.explanation,
     )
+    if main_part_id is not None:
+        cur.execute(
+            """
+            UPDATE question_problem_solving_parts
+            SET question_text = %s,
+                image_filename = %s,
+                correct_answer = %s,
+                explanation = %s
+            WHERE part_id = %s
+            """,
+            (*main_payload, main_part_id),
+        )
+    else:
+        cur.execute(
+            """
+            INSERT INTO question_problem_solving_parts (
+                question_id,
+                part_number,
+                question_text,
+                image_filename,
+                correct_answer,
+                explanation
+            ) VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING part_id
+            """,
+            (question_id, None, *main_payload),
+        )
+        cur.fetchone()
+
+    for part in question.parts:
+        part_key = part.part_number
+        part_payload = (part.text, part.images or None)
+        part_id = parts_map.pop(part_key, None)
+        if part_id is not None:
+            cur.execute(
+                """
+                UPDATE question_problem_solving_parts
+                SET question_text = %s,
+                    image_filename = %s
+                WHERE part_id = %s
+                """,
+                (*part_payload, part_id),
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO question_problem_solving_parts (
+                    question_id,
+                    part_number,
+                    question_text,
+                    image_filename,
+                    correct_answer,
+                    explanation
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (question_id, part.part_number, part.text, part.images or None, None, None),
+            )
+
+    orphan_part_ids = [part_id for part_id in parts_map.values() if part_id is not None]
+    if orphan_part_ids:
+        cur.execute(
+            "DELETE FROM question_problem_solving_parts WHERE part_id = ANY(%s)",
+            (orphan_part_ids,),
+        )
 
 
 def clear_question_subtables(cur: psycopg.Cursor, question_id: int) -> None:
@@ -448,7 +794,6 @@ SUBTYPE_WRITERS = {
     "single_choice": write_single_choice,
     "multiple_choice": write_multiple_choice,
     "fill_blank": write_fill_blank,
-    "problem_solving": write_problem_solving,
 }
 
 
@@ -462,17 +807,35 @@ def insert_question(cur: psycopg.Cursor, question: Question) -> int:
     return question_id
 
 
-def update_question(cur: psycopg.Cursor, question_id: int, question: Question) -> int:
+def update_question(
+    cur: psycopg.Cursor,
+    question_id: int,
+    question: Question,
+    existing: Optional[StoredQuestion] = None,
+) -> int:
+    previous_type = existing.question.question_type if existing else None
+    if previous_type and previous_type != question.question_type:
+        clear_question_subtables(cur, question_id)
     cur.execute(
         "UPDATE question SET question_type = %s, difficulty = %s WHERE question_id = %s",
         (question.question_type, question.difficulty, question_id),
     )
-    write_question_payload(cur, question_id, question)
+    existing_parts: Optional[Dict[Optional[str], int]] = None
+    if question.question_type == "problem_solving" and existing:
+        existing_parts = existing.part_ids
+    write_question_payload(cur, question_id, question, existing_parts=existing_parts)
     return question_id
 
 
-def write_question_payload(cur: psycopg.Cursor, question_id: int, question: Question) -> None:
-    clear_question_subtables(cur, question_id)
+def write_question_payload(
+    cur: psycopg.Cursor,
+    question_id: int,
+    question: Question,
+    existing_parts: Optional[Dict[Optional[str], int]] = None,
+) -> None:
+    if question.question_type == "problem_solving":
+        write_problem_solving(cur, question_id, question, existing_parts=existing_parts)
+        return
     writer = SUBTYPE_WRITERS.get(question.question_type)
     if writer is None:
         raise ValueError(f"Unsupported question_type '{question.question_type}'")
@@ -501,14 +864,29 @@ def fetch_exam(conn: psycopg.Connection, year: int, name: str) -> Optional[Dict[
 def preview_exam(conn: psycopg.Connection, exam: Exam) -> None:
     existing = fetch_exam(conn, exam.year, exam.name)
     question_map = existing["question_map"] if existing else {}
+    existing_details = fetch_existing_questions(conn, question_map.values()) if question_map else {}
+    incoming_numbers = {question.number for question in exam.questions}
+    removed_numbers = sorted(set(question_map) - incoming_numbers)
     print("-- Planned operations --")
     for question in exam.questions:
         if question.number in question_map:
-            print(f"UPDATE question #{question.number} (question_id {question_map[question.number]})")
+            question_id = question_map[question.number]
+            stored = existing_details.get(question_id)
+            if stored and questions_equal(stored.question, question):
+                print(f"SKIP question #{question.number} (question_id {question_id})")
+            else:
+                print(f"UPDATE question #{question.number} (question_id {question_id})")
         else:
             print(f"INSERT question #{question.number}")
+    for number in removed_numbers:
+        print(f"REMOVE question #{number} from exam mapping")
     if existing:
-        print(f"UPDATE exam '{exam.name}' ({exam.year}) (exam_id {existing['exam_id']})")
+        province_changed = existing["province"] != exam.provinces
+        description_changed = (existing["description"] or "") != (exam.description or "")
+        if province_changed or description_changed:
+            print(f"UPDATE exam '{exam.name}' ({exam.year}) (exam_id {existing['exam_id']})")
+        else:
+            print(f"SKIP exam '{exam.name}' ({exam.year}) metadata")
     else:
         print(f"INSERT exam '{exam.name}' ({exam.year})")
 
@@ -517,6 +895,10 @@ def upsert_exam(conn: psycopg.Connection, exam: Exam) -> None:
     existing = fetch_exam(conn, exam.year, exam.name)
     question_map = existing["question_map"] if existing else {}
     exam_id: Optional[int] = existing["exam_id"] if existing else None
+    existing_details = fetch_existing_questions(conn, question_map.values()) if question_map else {}
+
+    incoming_numbers = {question.number for question in exam.questions}
+    removed_numbers = sorted(set(question_map) - incoming_numbers)
 
     question_refs: List[Tuple[int, int]] = []
     with conn.cursor() as cur:
@@ -525,7 +907,11 @@ def upsert_exam(conn: psycopg.Connection, exam: Exam) -> None:
             if existing_id is None:
                 question_id = insert_question(cur, question)
             else:
-                question_id = update_question(cur, existing_id, question)
+                stored = existing_details.get(existing_id)
+                if stored and questions_equal(stored.question, question):
+                    question_id = existing_id
+                else:
+                    question_id = update_question(cur, existing_id, question, existing=stored)
             question_refs.append((question.number, question_id))
 
     with conn.cursor() as cur:
@@ -540,15 +926,28 @@ def upsert_exam(conn: psycopg.Connection, exam: Exam) -> None:
             )
             exam_id = cur.fetchone()[0]
         else:
+            province_changed = existing["province"] != exam.provinces
+            description_changed = (existing["description"] or "") != (exam.description or "")
+            if province_changed or description_changed:
+                cur.execute(
+                    "UPDATE exam SET province = %s, description = %s WHERE exam_id = %s",
+                    (exam.provinces, exam.description, exam_id),
+                )
+        if removed_numbers:
             cur.execute(
-                "UPDATE exam SET province = %s, description = %s WHERE exam_id = %s",
-                (exam.provinces, exam.description, exam_id),
+                "DELETE FROM exam_question WHERE exam_id = %s AND question_num = ANY(%s)",
+                (exam_id, removed_numbers),
             )
-        cur.execute("DELETE FROM exam_question WHERE exam_id = %s", (exam_id,))
-        cur.executemany(
-            "INSERT INTO exam_question (exam_id, question_num, question_id) VALUES (%s, %s, %s)",
-            [(exam_id, number, question_id) for number, question_id in question_refs],
-        )
+        if question_refs:
+            cur.executemany(
+                """
+                INSERT INTO exam_question (exam_id, question_num, question_id)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (exam_id, question_num) DO UPDATE SET
+                    question_id = EXCLUDED.question_id
+                """,
+                [(exam_id, number, question_id) for number, question_id in question_refs],
+            )
 
 
 # ---------------------------------------------------------------------------
