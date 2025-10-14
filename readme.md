@@ -198,6 +198,8 @@ psql -h 101.126.70.212 -U zhouenyu -d data
 | 指数对数 | `e^{x}`, `\ln x`, `\log_a b` | $\ln x$, $\log_2 8$ |
 | 集合符号 | `\in`, `\subset`, `\cap`, `\cup`, `\mid` | $A\cap B$, $x\mid y$ |
 | 补集符号 | `\complement_{U}A` | $\complement_{U}A$ |
-| 角度与平行 | `^\circ`, `\angle`, `\parallel` | $\angle ABC$, $AB\parallel CD$ |
+| 角度与平行 | `^\circ`, `\angle`, `\mathrel{\!/\mkern-3mu/}` | $\angle ABC$, $AB \mathrel{\!/\mkern-3mu/} CD$ |
+
+注意用 \mathrel{\!/\mkern-3mu/} 而非 \parallel 表示平行
 
 更新本指南时，请同步检查脚本与 SQL 中的字段定义，避免命名不一致导致导入失败。
