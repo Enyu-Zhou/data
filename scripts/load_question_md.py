@@ -103,6 +103,48 @@ def markdown_to_html_list(source: str) -> list[str]:
     return cleaned or [html]
 
 
+def markdown_to_text_list(source: str) -> list[str]:
+    """Convert markdown text to plain-text fragments without HTML tags."""
+    text = source.strip()
+    if not text:
+        return []
+
+    html = markdown.markdown(text, extensions=["extra"])
+    soup = BeautifulSoup(html, "html.parser")
+    fragments: list[str] = []
+
+    for node in soup.contents:
+        if isinstance(node, NavigableString):
+            cleaned = node.strip()
+            if cleaned:
+                fragments.append(cleaned)
+            continue
+
+        if isinstance(node, Tag) and node.name in {"ul", "ol"}:
+            for child in node.find_all("li", recursive=False):
+                child_text = child.get_text(separator=" ", strip=True)
+                if child_text:
+                    fragments.append(child_text)
+        else:
+            node_text = node.get_text(separator=" ", strip=True)
+            if node_text:
+                fragments.append(node_text)
+
+    cleaned_fragments = [fragment for fragment in fragments if fragment]
+    raw_lines = [line.strip() for line in text.splitlines() if line.strip()]
+
+    if cleaned_fragments:
+        if len(cleaned_fragments) == 1 and len(raw_lines) > 1:
+            return raw_lines
+        return cleaned_fragments
+
+    if len(raw_lines) > 1:
+        return raw_lines
+
+    fallback = soup.get_text(separator=" ", strip=True)
+    return [fallback] if fallback else []
+
+
 def parse_attributes(raw_text: str) -> Dict[str, str]:
     """Parse key:value pairs from the 属性 section."""
     attributes: Dict[str, str] = {}
@@ -134,14 +176,14 @@ def build_payload(md_path: Path) -> Dict[str, object]:
         raise ValueError("Accuracy must be a float.") from value_error
 
     question_html = markdown_to_html(sections["题目"])
-    answer_html_list = markdown_to_html_list(sections["答案"])
+    answer_text_list = markdown_to_text_list(sections["答案"])
     analysis_html_list = markdown_to_html_list(sections["分析"])
     explanation_html_list = markdown_to_html_list(sections["详解"])
-    knowledge_html_list = markdown_to_html_list(sections["知识点"])
+    knowledge_text_list = markdown_to_text_list(sections["知识点"])
 
     if not question_html:
         raise ValueError("Question section cannot be empty.")
-    if not answer_html_list:
+    if not answer_text_list:
         raise ValueError("Answer section cannot be empty.")
 
     question_id = int(md_path.stem)
@@ -151,10 +193,10 @@ def build_payload(md_path: Path) -> Dict[str, object]:
         "question_type": question_type,
         "accuracy": accuracy,
         "question": question_html,
-        "answer": answer_html_list,
+    "answer": answer_text_list,
         "analysis": analysis_html_list,
         "explanation": explanation_html_list,
-        "knowledge": knowledge_html_list,
+        "knowledge": knowledge_text_list,
     }
 
 
