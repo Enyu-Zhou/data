@@ -16,10 +16,10 @@ except ImportError as exc:  # pragma: no cover - import guard
     ) from exc
 
 try:
-    import markdown  # type: ignore
+    from markdown_it import MarkdownIt  # type: ignore
 except ImportError as exc:  # pragma: no cover - import guard
     raise SystemExit(
-        "The 'markdown' package is required. Install it with 'pip install markdown'."
+        "The 'markdown-it-py' package is required. Install it with 'pip install markdown-it-py'."
     ) from exc
 
 try:
@@ -36,7 +36,6 @@ except ImportError as exc:  # pragma: no cover - import guard
         "The 'python-dotenv' package is required. Install it with 'pip install python-dotenv'."
     ) from exc
 
-
 SECTION_PARSERS: Dict[str, str] = {
     "题目": "question",
     "答案": "answer",
@@ -45,6 +44,8 @@ SECTION_PARSERS: Dict[str, str] = {
     "知识点": "knowledge",
     "属性": "attributes",
 }
+
+MARKDOWN_RENDERER = MarkdownIt("commonmark").disable("escape")
 
 
 def parse_sections(md_path: Path) -> Dict[str, str]:
@@ -74,7 +75,7 @@ def parse_sections(md_path: Path) -> Dict[str, str]:
 def markdown_to_html(source: str) -> str:
     """Convert markdown text to HTML."""
     text = source.strip()
-    return markdown.markdown(text, extensions=["extra"]) if text else ""
+    return MARKDOWN_RENDERER.render(text).strip() if text else ""
 
 
 def markdown_to_html_list(source: str) -> list[str]:
@@ -83,7 +84,7 @@ def markdown_to_html_list(source: str) -> list[str]:
     if not text:
         return []
 
-    html = markdown.markdown(text, extensions=["extra"])
+    html = MARKDOWN_RENDERER.render(text).strip()
     soup = BeautifulSoup(html, "html.parser")
     fragments: list[str] = []
 
@@ -109,7 +110,7 @@ def markdown_to_text_list(source: str) -> list[str]:
     if not text:
         return []
 
-    html = markdown.markdown(text, extensions=["extra"])
+    html = MARKDOWN_RENDERER.render(text).strip()
     soup = BeautifulSoup(html, "html.parser")
     fragments: list[str] = []
 
