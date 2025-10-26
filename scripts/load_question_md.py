@@ -165,7 +165,8 @@ def build_payload(md_path: Path) -> Dict[str, object]:
     required_headings = {"题目", "答案", "分析", "详解", "知识点", "属性"}
     missing = required_headings - sections.keys()
     if missing:
-        raise ValueError(f"Markdown file is missing sections: {', '.join(sorted(missing))}")
+        raise ValueError(
+            f"Markdown file is missing sections: {', '.join(sorted(missing))}")
 
     attributes = parse_attributes(sections["属性"])
     try:
@@ -194,7 +195,7 @@ def build_payload(md_path: Path) -> Dict[str, object]:
         "question_type": question_type,
         "accuracy": accuracy,
         "question": question_html,
-    "answer": answer_text_list,
+        "answer": answer_text_list,
         "analysis": analysis_html_list,
         "explanation": explanation_html_list,
         "knowledge": knowledge_text_list,
@@ -233,7 +234,8 @@ def insert_question(dsn: str, payload: Dict[str, object]) -> None:
 
 def main() -> None:
     load_dotenv()
-    parser = argparse.ArgumentParser(description="Load a markdown question into PostgreSQL.")
+    parser = argparse.ArgumentParser(
+        description="Load a markdown question into PostgreSQL.")
     parser.add_argument(
         "md_path",
         type=Path,
@@ -242,16 +244,19 @@ def main() -> None:
     parser.add_argument(
         "--dsn",
         default=os.getenv("DATABASE_URL"),
-        help="PostgreSQL DSN or connection string. Defaults to env DATABASE_URL.",
+        help=
+        "PostgreSQL DSN or connection string. Defaults to env DATABASE_URL.",
     )
     args = parser.parse_args()
 
     if args.dsn is None:
-        parser.error("A PostgreSQL DSN must be provided via --dsn or DATABASE_URL.")
+        parser.error(
+            "A PostgreSQL DSN must be provided via --dsn or DATABASE_URL.")
 
     payload = build_payload(args.md_path)
     insert_question(args.dsn, payload)
-    print(f"Inserted question {payload['question_id']} into content.questions.")
+    print(
+        f"Inserted question {payload['question_id']} into content.questions.")
 
 
 if __name__ == "__main__":
